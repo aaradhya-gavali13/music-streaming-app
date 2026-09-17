@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+music_stream.db
+
+# Node / Frontend
+node_modules/
+dist/
+.vite/
+
+# Environment & Secrets
+.env
+.env.local
+*.log
+
+# IDE
+.vscode/
+.idea/
+.DS_Store
