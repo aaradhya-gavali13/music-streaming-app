@@ -10,7 +10,8 @@ export function getApiBase() {
   if (envUrl) {
     return envUrl.replace(/\/$/, '') + '/api';
   }
-  return '/api';
+  // Default to deployed Render backend in production
+  return 'https://music-streaming-app-1-v28n.onrender.com/api';
 }
 
 function getAuthHeader() {
