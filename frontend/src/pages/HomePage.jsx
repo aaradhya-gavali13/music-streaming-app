@@ -85,6 +85,7 @@ export default function HomePage({ onSelectArtist, onSelectPlaylist, onSelectAlb
   }
 
   const trendingTracks = feed?.trending || [];
+  const indianTracks = feed?.indian_trending || [];
   const featuredPlaylists = feed?.featured_playlists || [];
   const genres = feed?.genres || [];
   const newReleases = feed?.new_releases || [];
@@ -138,6 +139,38 @@ export default function HomePage({ onSelectArtist, onSelectPlaylist, onSelectAlb
               className="d-md-block"
             />
           )}
+        </section>
+      )}
+
+      {/* Indian Music Spotlight Section */}
+      {indianTracks.length > 0 && (
+        <section style={{ marginBottom: '40px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span>🇮🇳</span>
+              <span>Popular in India & Desi Hits</span>
+            </h2>
+            <button 
+              className="btn btn-ghost" 
+              style={{ fontSize: '0.85rem' }}
+              onClick={() => onSearchGenre('Bollywood')}
+            >
+              See All Bollywood →
+            </button>
+          </div>
+          <div className="cards-grid">
+            {indianTracks.slice(0, 6).map(t => (
+              <MusicCard 
+                key={t.id}
+                title={t.title}
+                subtitle={t.artist}
+                imageUrl={t.artwork_url}
+                onClick={() => playTrack(t, indianTracks)}
+                onPlayClick={() => playTrack(t, indianTracks)}
+                badgeText="Desi Hit"
+              />
+            ))}
+          </div>
         </section>
       )}
 

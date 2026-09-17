@@ -147,19 +147,84 @@ class AudiusProvider(MusicProvider):
             track_count=raw.get("total_play_count", 0) or len(raw.get("tracks", []))
         )
 
-    async def search(self, query: str, search_type: str = "all", limit: int = 20) -> SearchResponse:
+    def _rank_tracks(self, tracks: List[TrackItem], query: str) -> List[TrackItem]:
+        """Rank tracks so exact song and artist matches appear at the top."""
+        q = query.strip().lower()
+        if not q:
+            return tracks
+
+        q_clean = "".join(c for c in q if c.isalnum())
+        q_words = [w for w in q.split() if len(w) > 1] or q.split()
+
+        seen_ids = set()
+        deduped: List[TrackItem] = []
+        for t in tracks:
+            if t.id in seen_ids:
+                continue
+            seen_ids.add(t.id)
+            deduped.append(t)
+
+        def score(t: TrackItem) -> float:
+            title = (t.title or "").strip().lower()
+            artist = (t.artist or "").strip().lower()
+            title_clean = "".join(c for c in title if c.isalnum())
+            artist_clean = "".join(c for c in artist if c.isalnum())
+            s = 0.0
+
+            # 1. Exact song title match (Top Priority)
+            if title == q:
+                s += 20000.0
+            elif title_clean and title_clean == q_clean:
+                s += 18000.0
+            elif title.startswith(q):
+                s += 12000.0
+            elif q in title:
+                s += 8000.0
+
+            # 2. Exact artist match
+            if artist == q:
+                s += 15000.0
+            elif artist_clean and artist_clean == q_clean:
+                s += 14000.0
+            elif artist.startswith(q):
+                s += 9000.0
+            elif q in artist:
+                s += 6000.0
+
+            # 3. Word-level overlap in title and artist
+            t_words = set(title.split())
+            a_words = set(artist.split())
+            matching_title_words = sum(1 for w in q_words if w in t_words)
+            matching_artist_words = sum(1 for w in q_words if w in a_words)
+            s += matching_title_words * 2500.0
+            s += matching_artist_words * 1500.0
+
+            # 4. Partial substring in clean strings
+            if q_clean and q_clean in title_clean:
+                s += 4000.0
+            if q_clean and q_clean in artist_clean:
+                s += 2000.0
+
+            # 5. Play count / popularity tie-breaker
+            s += min(float(t.play_count or 0), 10000.0) / 10.0
+            return s
+
+        deduped.sort(key=score, reverse=True)
+        return deduped
+
+    async def search(self, query: str, search_type: str = "all", limit: int = 30) -> SearchResponse:
         host = await self._get_host()
         tracks: List[TrackItem] = []
         artists: List[ArtistItem] = []
         playlists: List[PlaylistItem] = []
 
         async with httpx.AsyncClient(timeout=8.0) as client:
-            # Search tracks
+            # Search tracks with expanded candidate limit for ranking
             if search_type in ("all", "tracks"):
                 try:
                     res = await client.get(
                         f"{host}/v1/tracks/search",
-                        params={"query": query, "limit": limit, "app_name": self.app_name}
+                        params={"query": query, "limit": max(limit, 40), "app_name": self.app_name}
                     )
                     if res.status_code == 200:
                         for item in res.json().get("data", []):
@@ -193,10 +258,13 @@ class AudiusProvider(MusicProvider):
                 except Exception as e:
                     logger.error(f"Audius search playlists failed: {e}")
 
+        # Rank tracks by exact title / artist match
+        ranked_tracks = self._rank_tracks(tracks, query)
+
         return SearchResponse(
             query=query,
             provider="audius",
-            tracks=tracks,
+            tracks=ranked_tracks[:limit],
             artists=artists,
             albums=[],
             playlists=playlists
@@ -328,15 +396,33 @@ class AudiusProvider(MusicProvider):
             except Exception as e:
                 logger.error(f"Audius trending playlists error: {e}")
 
+        # Fetch Indian music spotlight
+        indian_trending: List[TrackItem] = []
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            try:
+                ind_res = await client.get(
+                    f"{host}/v1/tracks/search",
+                    params={"query": "bollywood hindi", "limit": 12, "app_name": self.app_name}
+                )
+                if ind_res.status_code == 200:
+                    for item in ind_res.json().get("data", []):
+                        indian_trending.append(self._format_track(item, host))
+            except Exception as e:
+                logger.debug(f"Audius indian trending search failed: {e}")
+
         genres = [
+            {"id": "Bollywood", "name": "🇮🇳 Bollywood & Hindi", "color": "#f97316"},
+            {"id": "Punjabi", "name": "🔥 Punjabi & Bhangra", "color": "#ef4444"},
+            {"id": "Desi Hip-Hop", "name": "🎤 Desi Hip-Hop", "color": "#8b5cf6"},
+            {"id": "Hindi Lo-Fi", "name": "✨ Hindi Lo-Fi", "color": "#10b981"},
             {"id": "Electronic", "name": "Electronic", "color": "#6366f1"},
             {"id": "Hip-Hop/Rap", "name": "Hip-Hop & Rap", "color": "#ec4899"},
             {"id": "Pop", "name": "Pop", "color": "#f59e0b"},
             {"id": "Rock", "name": "Rock", "color": "#ef4444"},
-            {"id": "Lo-Fi", "name": "Chill / Lo-Fi", "color": "#10b981"},
+            {"id": "Lo-Fi", "name": "Chill / Lo-Fi", "color": "#14b8a6"},
             {"id": "Ambient", "name": "Ambient & Acoustic", "color": "#06b6d4"},
-            {"id": "R&B", "name": "R&B / Soul", "color": "#8b5cf6"},
-            {"id": "Dance", "name": "House & Dance", "color": "#14b8a6"},
+            {"id": "R&B", "name": "R&B / Soul", "color": "#a855f7"},
+            {"id": "Indian Classical", "name": "Indian Classical", "color": "#eab308"},
         ]
 
         return HomeFeedResponse(
@@ -344,7 +430,8 @@ class AudiusProvider(MusicProvider):
             trending=trending,
             featured_playlists=playlists,
             genres=genres,
-            new_releases=trending[:10]
+            new_releases=trending[:10],
+            indian_trending=indian_trending
         )
 
 

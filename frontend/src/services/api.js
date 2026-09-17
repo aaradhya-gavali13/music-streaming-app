@@ -103,6 +103,79 @@ async function directAudiusFetch(endpoint, params = {}) {
   return json.data;
 }
 
+// Rank tracks so exact song and artist matches appear at the top
+function rankTracks(tracks, query) {
+  if (!query || !query.trim()) return tracks;
+  const q = query.trim().toLowerCase();
+  const qClean = q.replace(/[^a-z0-9]/g, '');
+  const qWords = q.split(/\s+/).filter(w => w.length > 1);
+  const wordsToMatch = qWords.length > 0 ? qWords : q.split(/\s+/).filter(Boolean);
+
+  const seen = new Set();
+  const deduped = [];
+  for (const t of tracks) {
+    if (!t || !t.id || seen.has(t.id)) continue;
+    seen.add(t.id);
+    deduped.push(t);
+  }
+
+  function score(t) {
+    const title = (t.title || '').toLowerCase().trim();
+    const artist = (t.artist || '').toLowerCase().trim();
+    const titleClean = title.replace(/[^a-z0-9]/g, '');
+    const artistClean = artist.replace(/[^a-z0-9]/g, '');
+    let s = 0;
+
+    // 1. Exact song title match (Top Priority)
+    if (title === q) {
+      s += 20000;
+    } else if (titleClean && titleClean === qClean) {
+      s += 18000;
+    } else if (title.startsWith(q)) {
+      s += 12000;
+    } else if (title.includes(q)) {
+      s += 8000;
+    }
+
+    // 2. Exact artist match
+    if (artist === q) {
+      s += 15000;
+    } else if (artistClean && artistClean === qClean) {
+      s += 14000;
+    } else if (artist.startsWith(q)) {
+      s += 9000;
+    } else if (artist.includes(q)) {
+      s += 6000;
+    }
+
+    // 3. Word-level overlap in title and artist
+    const titleWords = new Set(title.split(/\s+/).filter(Boolean));
+    const artistWords = new Set(artist.split(/\s+/).filter(Boolean));
+    let matchingTitleWords = 0;
+    let matchingArtistWords = 0;
+    for (const w of wordsToMatch) {
+      if (titleWords.has(w)) matchingTitleWords++;
+      if (artistWords.has(w)) matchingArtistWords++;
+    }
+    s += matchingTitleWords * 2500;
+    s += matchingArtistWords * 1500;
+
+    // 4. Substring in clean strings
+    if (qClean && titleClean.includes(qClean)) {
+      s += 4000;
+    }
+    if (qClean && artistClean.includes(qClean)) {
+      s += 2000;
+    }
+
+    // 5. Play count / popularity tie-breaker
+    s += Math.min(Number(t.play_count || 0), 10000) / 10;
+    return s;
+  }
+
+  return deduped.sort((a, b) => score(b) - score(a));
+}
+
 // LocalStorage helpers for standalone client mode
 function getLocal(key, def) {
   try {
@@ -171,6 +244,15 @@ export const api = {
       const trendingData = await directAudiusFetch('/v1/tracks/trending', { limit: 24 });
       const trending = (trendingData || []).map(formatAudiusTrack);
       
+      // Fetch Indian / Bollywood spotlight tracks
+      let indianTrending = [];
+      try {
+        const indData = await directAudiusFetch('/v1/tracks/search', { query: 'bollywood hindi', limit: 12 });
+        indianTrending = (indData || []).map(formatAudiusTrack);
+      } catch (indErr) {
+        console.debug("Indian tracks direct fetch:", indErr);
+      }
+
       let playlists = [];
       try {
         const plData = await directAudiusFetch('/v1/playlists/trending', { limit: 8 });
@@ -190,15 +272,21 @@ export const api = {
       return {
         provider: "audius",
         trending,
+        indian_trending: indianTrending,
         featured_playlists: playlists,
         genres: [
-          { id: "Electronic", name: "Electronic" },
-          { id: "Hip-Hop/Rap", name: "Hip-Hop & Rap" },
-          { id: "Pop", name: "Pop" },
-          { id: "Rock", name: "Rock" },
-          { id: "Lo-Fi", name: "Chill / Lo-Fi" },
-          { id: "Ambient", name: "Ambient & Acoustic" },
-          { id: "R&B", name: "R&B / Soul" },
+          { id: "Bollywood", name: "🇮🇳 Bollywood & Hindi", color: "#f97316" },
+          { id: "Punjabi", name: "🔥 Punjabi & Bhangra", color: "#ef4444" },
+          { id: "Desi Hip-Hop", name: "🎤 Desi Hip-Hop", color: "#8b5cf6" },
+          { id: "Hindi Lo-Fi", name: "✨ Hindi Lo-Fi", color: "#10b981" },
+          { id: "Electronic", name: "Electronic", color: "#6366f1" },
+          { id: "Hip-Hop/Rap", name: "Hip-Hop & Rap", color: "#ec4899" },
+          { id: "Pop", name: "Pop", color: "#f59e0b" },
+          { id: "Rock", name: "Rock", color: "#ef4444" },
+          { id: "Lo-Fi", name: "Chill / Lo-Fi", color: "#14b8a6" },
+          { id: "Ambient", name: "Ambient & Acoustic", color: "#06b6d4" },
+          { id: "R&B", name: "R&B / Soul", color: "#a855f7" },
+          { id: "Indian Classical", name: "Indian Classical", color: "#eab308" },
         ],
         new_releases: trending.slice(0, 10)
       };
@@ -209,8 +297,10 @@ export const api = {
     try {
       return await request(`/search?q=${encodeURIComponent(q)}&type=${type}&limit=${limit}`);
     } catch {
-      const data = await directAudiusFetch('/v1/tracks/search', { query: q, limit: limit });
-      const tracks = (data || []).map(formatAudiusTrack);
+      // Direct Audius query with exact match ranking
+      const data = await directAudiusFetch('/v1/tracks/search', { query: q, limit: Math.max(limit, 40) });
+      const rawTracks = (data || []).map(formatAudiusTrack);
+      const rankedTracks = rankTracks(rawTracks, q);
       
       let artists = [];
       try {
@@ -230,7 +320,7 @@ export const api = {
       return {
         query: q,
         provider: "audius",
-        tracks,
+        tracks: rankedTracks.slice(0, limit),
         artists,
         albums: [],
         playlists: []

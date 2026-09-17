@@ -104,6 +104,7 @@ class HomeFeedResponse(BaseModel):
     featured_playlists: List[PlaylistItem] = []
     genres: List[dict] = []
     new_releases: List[TrackItem] = []
+    indian_trending: List[TrackItem] = []
 
 # --- Database User Content Schemas ---
 class AddTrackRequest(BaseModel):

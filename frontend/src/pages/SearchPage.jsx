@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search as SearchIcon, Disc, Mic2, Music, ListMusic } from 'lucide-react';
+import { Search as SearchIcon, Disc, Mic2, Music, ListMusic, Play } from 'lucide-react';
 import { api } from '../services/api';
 import TrackRow from '../components/TrackRow';
 import MusicCard from '../components/MusicCard';
@@ -70,17 +70,61 @@ export default function SearchPage({
   return (
     <div className="scrollable-page">
       {/* Search Input Bar on Page */}
-      <div style={{ maxWidth: '640px', marginBottom: '24px' }}>
+      <div style={{ maxWidth: '640px', marginBottom: '16px' }}>
         <div className="navbar-search" style={{ width: '100%', padding: '12px 20px' }}>
           <SearchIcon size={20} color="var(--text-muted)" />
           <input
             type="text"
-            placeholder="Search millions of tracks, artists, or playlists..."
+            placeholder="Search songs, artists, Bollywood, Punjabi..."
             value={query}
             onChange={handleSearchChange}
             onKeyDown={handleKeyDown}
             autoFocus
           />
+        </div>
+      </div>
+
+      {/* Quick Search Chips: Popular Indian & Global Trends */}
+      <div style={{ marginBottom: '24px' }}>
+        <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '8px', fontWeight: 500 }}>
+          🇮🇳 Quick Access & Trending in India:
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+          {[
+            'Bollywood Hits',
+            'Arijit Singh',
+            'Sidhu Moose Wala',
+            'Diljit Dosanjh',
+            'Hindi Lo-Fi',
+            'Punjabi Hits',
+            'Desi Hip-Hop',
+            'A.R. Rahman',
+            'Shreya Ghoshal',
+            'AP Dhillon',
+            'South Indian Hits',
+            'Indian Classical'
+          ].map(tag => (
+            <button
+              key={tag}
+              type="button"
+              className="genre-pill"
+              style={{
+                fontSize: '0.8rem',
+                padding: '4px 12px',
+                background: query === tag ? 'var(--accent-primary)' : 'rgba(255, 255, 255, 0.04)',
+                color: query === tag ? '#ffffff' : 'var(--text-secondary)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                cursor: 'pointer',
+                borderRadius: 'var(--radius-full)'
+              }}
+              onClick={() => {
+                setQuery(tag);
+                performSearch(tag, activeTab);
+              }}
+            >
+              {tag}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -125,6 +169,59 @@ export default function SearchPage({
       {/* Search Results Display */}
       {!loading && results && (
         <>
+          {/* Top Match Card */}
+          {activeTab === 'all' && tracks.length > 0 && (
+            <section style={{ marginBottom: '32px' }}>
+              <div 
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '20px',
+                  background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.14), rgba(236, 72, 153, 0.08))',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  borderRadius: 'var(--radius-lg)',
+                  padding: '18px 24px',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                }}
+                onClick={() => playTrack(tracks[0], tracks)}
+              >
+                {tracks[0].artwork_url ? (
+                  <img 
+                    src={tracks[0].artwork_url} 
+                    alt={tracks[0].title}
+                    style={{ width: '84px', height: '84px', borderRadius: 'var(--radius-md)', objectFit: 'cover' }}
+                  />
+                ) : (
+                  <div style={{ width: '84px', height: '84px', borderRadius: 'var(--radius-md)', background: 'var(--bg-surface-elevated)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Music size={32} color="var(--accent-primary)" />
+                  </div>
+                )}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--accent-primary)', fontWeight: 700 }}>
+                    Exact / Best Match
+                  </span>
+                  <h2 style={{ fontSize: '1.4rem', margin: '4px 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {tracks[0].title}
+                  </h2>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+                    Song • <strong>{tracks[0].artist}</strong>
+                  </p>
+                </div>
+                <button
+                  className="btn btn-primary"
+                  style={{ borderRadius: '50%', width: '48px', height: '48px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    playTrack(tracks[0], tracks);
+                  }}
+                >
+                  <Play size={20} fill="#ffffff" style={{ marginLeft: '2px' }} />
+                </button>
+              </div>
+            </section>
+          )}
+
           {/* Tracks section */}
           {(activeTab === 'all' || activeTab === 'tracks') && tracks.length > 0 && (
             <section style={{ marginBottom: '36px' }}>
