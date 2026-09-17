@@ -1,10 +1,10 @@
 from typing import List, Optional, Any
 from datetime import datetime
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 
 # --- Auth Schemas ---
 class UserRegister(BaseModel):
-    email: EmailStr
+    email: str = Field(..., min_length=5, max_length=255, pattern=r"^[^@]+@[^@]+\.[^@]+$")
     username: str = Field(..., min_length=3, max_length=50)
     password: str = Field(..., min_length=6, max_length=100)
     display_name: Optional[str] = None
