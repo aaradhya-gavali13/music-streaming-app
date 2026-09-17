@@ -1,4 +1,14 @@
-const API_BASE = (import.meta.env.VITE_API_BASE_URL ? import.meta.env.VITE_API_BASE_URL.replace(/\/$/, '') : '') + '/api';
+export function getApiBase() {
+  const customUrl = localStorage.getItem('aurasound_backend_url');
+  if (customUrl) {
+    return customUrl.replace(/\/$/, '') + '/api';
+  }
+  const envUrl = import.meta.env.VITE_API_BASE_URL;
+  if (envUrl) {
+    return envUrl.replace(/\/$/, '') + '/api';
+  }
+  return '/api';
+}
 
 function getAuthHeader() {
   const token = localStorage.getItem('aurasound_token');
@@ -6,7 +16,7 @@ function getAuthHeader() {
 }
 
 async function request(endpoint, options = {}) {
-  const url = `${API_BASE}${endpoint}`;
+  const url = `${getApiBase()}${endpoint}`;
   const headers = {
     'Content-Type': 'application/json',
     ...getAuthHeader(),

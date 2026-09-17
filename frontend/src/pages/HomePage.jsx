@@ -29,12 +29,25 @@ export default function HomePage({ onSelectArtist, onSelectPlaylist, onSelectAlb
     loadFeed();
   }, []);
 
+  const [backendInput, setBackendInput] = useState(localStorage.getItem('aurasound_backend_url') || '');
+
+  const handleSaveBackendUrl = (e) => {
+    e.preventDefault();
+    if (backendInput.trim()) {
+      localStorage.setItem('aurasound_backend_url', backendInput.trim());
+      loadFeed();
+    }
+  };
+
   if (loading) {
     return (
       <div className="scrollable-page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
         <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
           <Disc size={36} className="animate-spin" style={{ margin: '0 auto 12px' }} />
           <p>Connecting to authorized music catalog...</p>
+          <p style={{ fontSize: '0.8rem', marginTop: '8px', color: 'var(--text-muted)' }}>
+            (Render free servers take ~30 seconds to wake up on first load)
+          </p>
         </div>
       </div>
     );
@@ -42,9 +55,28 @@ export default function HomePage({ onSelectArtist, onSelectPlaylist, onSelectAlb
 
   if (error) {
     return (
-      <div className="scrollable-page" style={{ textAlign: 'center', padding: '60px 20px' }}>
-        <p style={{ color: '#f87171', marginBottom: '16px' }}>{error}</p>
-        <button className="btn btn-secondary" onClick={loadFeed}>
+      <div className="scrollable-page" style={{ textAlign: 'center', padding: '60px 20px', maxWidth: '560px', margin: '0 auto' }}>
+        <p style={{ color: '#f87171', marginBottom: '16px', fontSize: '1.05rem', fontWeight: 600 }}>{error}</p>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', marginBottom: '24px', lineHeight: '1.5' }}>
+          If your backend is hosted on Render, enter your Render backend URL below (e.g. <code>https://aurasound-backend.onrender.com</code>).
+        </p>
+
+        <form onSubmit={handleSaveBackendUrl} style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
+          <input
+            type="url"
+            placeholder="https://your-backend.onrender.com"
+            value={backendInput}
+            onChange={(e) => setBackendInput(e.target.value)}
+            className="form-input"
+            style={{ flex: 1 }}
+            required
+          />
+          <button type="submit" className="btn btn-primary" style={{ whiteSpace: 'nowrap' }}>
+            Save & Connect
+          </button>
+        </form>
+
+        <button className="btn btn-secondary" onClick={loadFeed} style={{ margin: '0 auto' }}>
           <RefreshCw size={16} />
           <span>Retry Connection</span>
         </button>
